@@ -1,0 +1,11 @@
+{
+  "name": "wagahai-typing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "夏目漱石『吾輩は猫である』を丸ごと打てるタイピングゲーム",
+  "scripts": {
+    "test": "node --test \"tests/js/**/*.test.js\"",
+    "serve": "python3 -m http.server 8000"
+  }
+}

@@ -269,6 +269,26 @@ def write_outputs(dataset: dict) -> None:
     for ch in dataset["chapters"]:
         path = CHAPTER_DIR / f"chapter{ch['chapter']:02d}.json"
         path.write_text(json.dumps(ch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    # 章選択画面が段落数などを先読みできるよう、軽量な索引を出力する
+    index = {
+        "title": dataset["meta"]["title"],
+        "author": dataset["meta"]["author"],
+        "chapter_count": dataset["meta"]["chapter_count"],
+        "paragraph_count": dataset["meta"]["paragraph_count"],
+        "chapters": [
+            {
+                "chapter": ch["chapter"],
+                "title": ch["title"],
+                "paragraph_count": ch["paragraph_count"],
+            }
+            for ch in dataset["chapters"]
+        ],
+    }
+    (CHAPTER_DIR / "index.json").write_text(
+        json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
     COMBINED_JSON.write_text(
         json.dumps(dataset, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>吾輩は猫である タイピング</title>
+<meta name="description" content="夏目漱石『吾輩は猫である』全文を打てるタイピングゲーム">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- 章選択 -->
+  <section id="view-select" class="view">
+    <header class="hero">
+      <p class="hero-kicker">夏目漱石 ／ 青空文庫</p>
+      <h1 class="hero-title">吾輩は猫である<span class="hero-title-sub">タイピング</span></h1>
+      <p class="hero-lead">
+        全11章・全2,245段落の原文を、ルビ（ひらがな）どおりにローマ字で打ち込むタイピングゲーム。
+        章をえらぶと、その章のデータだけを読み込みます。
+      </p>
+      <p class="hero-note" id="select-note">読み込み中…</p>
+    </header>
+    <div id="chapter-grid" class="chapter-grid"></div>
+  </section>
+
+  <!-- プレイ画面 -->
+  <section id="view-game" class="view is-hidden">
+    <header class="topbar">
+      <button id="btn-back" class="btn btn-ghost" type="button">← 章選択</button>
+      <div class="topbar-title">
+        <span class="chapter-label" id="game-chapter-label">第1章</span>
+        <span class="chapter-progress" id="game-progress">1 / 33 段落</span>
+      </div>
+      <button id="btn-skip" class="btn btn-ghost" type="button">この段落をスキップ ⇥</button>
+    </header>
+
+    <div class="statbar" id="statbar">
+      <div class="stat"><span class="stat-label">正解</span><span class="stat-value" id="stat-correct">0</span></div>
+      <div class="stat"><span class="stat-label">ミス</span><span class="stat-value" id="stat-miss">0</span></div>
+      <div class="stat"><span class="stat-label">正確率</span><span class="stat-value" id="stat-acc">100%</span></div>
+      <div class="stat"><span class="stat-label">速度</span><span class="stat-value" id="stat-kpm">0 <small>KPM</small></span></div>
+    </div>
+
+    <main class="play">
+      <div class="romaji-guide" aria-hidden="true">
+        <div class="guide-current">
+          <span class="guide-kana" id="guide-kana">あ</span>
+          <span class="guide-romaji" id="guide-romaji"></span>
+        </div>
+        <div class="guide-line" id="guide-line"></div>
+      </div>
+
+      <div class="text-panel" id="text-panel" tabindex="0" aria-label="タイピング対象の本文">
+        <div class="text-line" id="text-line"></div>
+      </div>
+      <p class="hint" id="hint">キーボードで入力してください（ローマ字）。ミスしても入力は止まりません。</p>
+    </main>
+  </section>
+
+  <!-- リザルト -->
+  <section id="view-result" class="view is-hidden">
+    <div class="result-card">
+      <p class="result-kicker">章クリア！</p>
+      <h2 class="result-title" id="result-title">第1章</h2>
+      <dl class="result-grid">
+        <div><dt>正解打鍵</dt><dd id="result-correct">0</dd></div>
+        <div><dt>ミス</dt><dd id="result-miss">0</dd></div>
+        <div><dt>正確率</dt><dd id="result-acc">0%</dd></div>
+        <div><dt>速度</dt><dd id="result-kpm">0 KPM</dd></div>
+        <div><dt>時間</dt><dd id="result-time">0秒</dd></div>
+        <div><dt>段落</dt><dd id="result-paras">0</dd></div>
+      </dl>
+      <div class="result-actions">
+        <button id="btn-retry" class="btn btn-primary" type="button">もう一度</button>
+        <button id="btn-next" class="btn" type="button">次の章へ</button>
+        <button id="btn-menu" class="btn btn-ghost" type="button">章選択へ</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+<footer class="footer">
+  <p>底本：青空文庫「吾輩は猫である」／パブリックドメイン。読みはルビと自動補完によるものです。</p>
+</footer>
+<script type="module" src="assets/js/app.js"></script>
+</body>
+</html>
