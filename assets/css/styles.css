@@ -44,7 +44,14 @@ body {
   padding: 32px 20px 24px;
 }
 
-.view.is-hidden { display: none; }
+/* ID セレクタ（#view-result の display:flex）より詳細度を上げ、
+   非表示時は必ず display:none にする */
+.view.is-hidden,
+#view-result.is-hidden,
+.is-hidden { display: none !important; }
+
+/* display を指定した要素でも hidden 属性を確実に効かせる */
+[hidden] { display: none !important; }
 
 /* ---------- 章選択 ---------- */
 .hero { text-align: center; margin: 24px 0 36px; }
@@ -76,6 +83,48 @@ body {
   font-size: 0.95rem;
 }
 .hero-note { color: var(--text-faint); font-size: 0.82rem; margin-top: 14px; }
+
+/* ---------- モード選択 ---------- */
+.mode-select {
+  display: inline-flex;
+  gap: 10px;
+  margin-top: 24px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 20px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.mode-btn:hover { color: var(--text); }
+.mode-btn.is-active {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.mode-btn .mode-name { font-size: 0.95rem; font-weight: 700; }
+.mode-btn .mode-desc { font-size: 0.72rem; color: var(--text-faint); }
+
+.endless-panel { text-align: center; margin-top: 8px; }
+.endless-lead {
+  max-width: 620px;
+  margin: 0 auto 22px;
+  color: var(--text-dim);
+  line-height: 1.9;
+  font-size: 0.95rem;
+}
+.btn-lg { padding: 14px 28px; font-size: 1rem; border-radius: 14px; }
 
 .chapter-grid {
   display: grid;
@@ -125,6 +174,16 @@ body {
 .topbar-title { text-align: center; line-height: 1.3; }
 .chapter-label { display: block; font-weight: 700; font-size: 1.05rem; }
 .chapter-progress { display: block; font-size: 0.8rem; color: var(--text-dim); }
+.mode-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+}
 
 .btn {
   border: 1px solid var(--border);
@@ -285,8 +344,30 @@ body {
 
 .footer { text-align: center; color: var(--text-faint); font-size: 0.76rem; padding: 20px; }
 
+/* ---------- トースト通知 ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translate(-50%, 16px);
+  z-index: 50;
+  padding: 12px 22px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+.toast.is-show { opacity: 1; transform: translate(-50%, 0); }
+
 @media (max-width: 560px) {
   .statbar { grid-template-columns: repeat(2, 1fr); }
   .result-grid { grid-template-columns: repeat(2, 1fr); }
   .topbar { flex-wrap: wrap; }
+  .mode-select { display: flex; flex-direction: column; }
 }

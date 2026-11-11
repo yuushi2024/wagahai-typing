@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>吾輩は猫である タイピング</title>
 <meta name="description" content="夏目漱石『吾輩は猫である』全文を打てるタイピングゲーム">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body>
@@ -19,9 +20,25 @@
         全11章・全2,245段落の原文を、ルビ（ひらがな）どおりにローマ字で打ち込むタイピングゲーム。
         章をえらぶと、その章のデータだけを読み込みます。
       </p>
+      <div class="mode-select" role="group" aria-label="プレイモード">
+        <button id="mode-normal" class="mode-btn is-active" type="button" aria-pressed="true">
+          <span class="mode-name">通常モード</span>
+          <span class="mode-desc">章ごとにリザルト</span>
+        </button>
+        <button id="mode-endless" class="mode-btn" type="button" aria-pressed="false">
+          <span class="mode-name">エンドレスモード</span>
+          <span class="mode-desc">全章通し・自動で次の章へ</span>
+        </button>
+      </div>
       <p class="hero-note" id="select-note">読み込み中…</p>
     </header>
     <div id="chapter-grid" class="chapter-grid"></div>
+    <div id="endless-panel" class="endless-panel is-hidden">
+      <p class="endless-lead">
+        第1章から最終章まで、章をまたいで自動で続けて進みます。スコアは全章を通した通算でカウントされます。
+      </p>
+      <button id="btn-endless-start" class="btn btn-primary btn-lg" type="button">▶ 第1章から全章スタート</button>
+    </div>
   </section>
 
   <!-- プレイ画面 -->
@@ -31,6 +48,7 @@
       <div class="topbar-title">
         <span class="chapter-label" id="game-chapter-label">第1章</span>
         <span class="chapter-progress" id="game-progress">1 / 33 段落</span>
+        <span class="mode-badge" id="game-mode-badge" hidden>エンドレスモード</span>
       </div>
       <button id="btn-skip" class="btn btn-ghost" type="button">この段落をスキップ ⇥</button>
     </header>
@@ -61,7 +79,7 @@
   <!-- リザルト -->
   <section id="view-result" class="view is-hidden">
     <div class="result-card">
-      <p class="result-kicker">章クリア！</p>
+      <p class="result-kicker" id="result-kicker">章クリア！</p>
       <h2 class="result-title" id="result-title">第1章</h2>
       <dl class="result-grid">
         <div><dt>正解打鍵</dt><dd id="result-correct">0</dd></div>
@@ -80,6 +98,7 @@
   </section>
 
 </div>
+<div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
 <footer class="footer">
   <p>底本：青空文庫「吾輩は猫である」／パブリックドメイン。読みはルビと自動補完によるものです。</p>
 </footer>

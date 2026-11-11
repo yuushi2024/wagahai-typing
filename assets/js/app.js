@@ -1,5 +1,5 @@
 // 画面の制御（章選択 → プレイ → リザルト）
-import { TypingSession } from './engine.js';
+import { TypingSession, EndlessRun } from './engine.js';
 import { tokensForParagraph } from './align.js';
 import { canonicalRomaji } from './romaji.js';
 
@@ -12,7 +12,16 @@ const state = {
   session: null,
   tokens: [],
   errorTimer: null,
+  mode: 'normal', // 'normal' | 'endless'
+  run: null, // エンドレスモードの通算管理
 };
+
+// 章データの取得（存在する章はすべて取得できる）
+async function fetchChapterData(chapterNo) {
+  const res = await fetch(`data/chapters/chapter${String(chapterNo).padStart(2, '0')}.json`);
+  if (!res.ok) throw new Error(`章データの取得に失敗 (${res.status})`);
+  return res.json();
+}
 
 // ---------- 章選択 ----------
 async function loadIndex() {
@@ -40,28 +49,66 @@ function renderChapters(index) {
   }
 }
 
+// 通常モード: 選ばれた章だけを読み込んで開始
 async function startChapter(index, chapterNo) {
-  // 選ばれた章の JSON だけを読み込む（段階的ロード）
-  const res = await fetch(`data/chapters/chapter${String(chapterNo).padStart(2, '0')}.json`);
-  if (!res.ok) throw new Error(`章データの取得に失敗 (${res.status})`);
-  state.chapterData = await res.json();
+  state.chapterData = await fetchChapterData(chapterNo);
   state.chapter = chapterNo;
   state.index = index;
+  state.run = null;
   beginSession();
+}
+
+// エンドレスモード: 第1章から全章通しで開始
+async function startEndless(index) {
+  state.index = index;
+  state.run = new EndlessRun(index);
+  await enterRunChapter(index.chapters[0].chapter);
+}
+
+// エンドレスの現在章を読み込んでセッションを開始する
+async function enterRunChapter(chapterNo) {
+  const data = await fetchChapterData(chapterNo);
+  state.chapter = chapterNo;
+  state.chapterData = data;
+  state.session = state.run.start(data.paragraphs);
+  show('view-game');
+  updateModeUI();
+  loadParagraph();
+  updateStats();
+}
+
+// エンドレスで次の章へ（章クリア後）
+async function advanceRunChapter(chapterNo) {
+  const data = await fetchChapterData(chapterNo);
+  state.chapter = chapterNo;
+  state.chapterData = data;
+  state.session = state.run.advance(data.paragraphs);
+  loadParagraph();
+  updateStats();
 }
 
 function beginSession() {
   state.session = new TypingSession(state.chapterData.paragraphs);
   show('view-game');
+  updateModeUI();
   loadParagraph();
   updateStats();
+}
+
+// モードに応じてヘッダーのバッジ表示を切り替える
+function updateModeUI() {
+  $('game-mode-badge').hidden = state.mode !== 'endless';
 }
 
 // ---------- プレイ ----------
 function loadParagraph() {
   const p = state.session.current;
   state.tokens = tokensForParagraph(p.text, p.ruby);
-  $('game-chapter-label').textContent = `第${state.chapter}章`;
+  const label = $('game-chapter-label');
+  label.textContent = `第${state.chapter}章`;
+  if (state.mode === 'endless' && state.run) {
+    label.textContent += `（${state.run.chapterPos + 1}/${state.run.chapterCount}）`;
+  }
   renderText();
   renderGuide();
 }
@@ -147,12 +194,30 @@ function escapeHtml(s) {
 }
 
 function updateStats() {
-  const st = state.session.stats;
+  // エンドレス中は全章通算のスコアを表示する
+  const st = state.mode === 'endless' && state.run
+    ? state.run.totalStats
+    : state.session.stats;
   $('stat-correct').textContent = st.correct;
   $('stat-miss').textContent = st.miss;
   $('stat-acc').textContent = `${st.accuracy.toFixed(1)}%`;
   $('stat-kpm').innerHTML = `${st.kpm.toFixed(0)} <small>KPM</small>`;
-  $('game-progress').textContent = `${st.paragraphNumber} / ${st.paragraphCount} 段落`;
+  $('game-progress').textContent = `${state.session.paragraphNumber} / ${state.session.paragraphCount} 段落`;
+}
+
+// 画面下部のトースト通知（章の自動進行などに使う）
+let toastTimer = null;
+function showToast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.remove('is-hidden');
+  void el.offsetWidth; // 連続表示でもアニメーションを再生し直す
+  el.classList.add('is-show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.classList.remove('is-show');
+    el.classList.add('is-hidden');
+  }, 1800);
 }
 
 function flashError() {
@@ -182,7 +247,7 @@ function handleKey(e) {
   if (r.type === 'paragraph-complete') {
     loadParagraph();
   } else if (r.type === 'chapter-complete') {
-    showResult();
+    handleChapterComplete();
     return;
   }
   refreshHighlight();
@@ -193,24 +258,66 @@ function skipParagraph() {
   if (state.session.finished) return;
   const r = state.session.skipParagraph();
   updateStats();
-  if (r.type === 'chapter-complete') { showResult(); return; }
+  if (r.type === 'chapter-complete') { handleChapterComplete(); return; }
   loadParagraph();
+}
+
+// 章の最終段落を打ち終えたときの処理（モードで分岐）
+async function handleChapterComplete() {
+  if (state.mode === 'endless' && state.run) {
+    const cleared = state.chapter;
+    const next = state.run.nextChapterNumber;
+    if (next === null) {
+      // 最終章まで走破 → 完全クリア
+      state.run.advance();
+      showResult();
+      return;
+    }
+    showToast(`第${cleared}章 クリア！ → 第${next}章へ`);
+    try {
+      await advanceRunChapter(next);
+    } catch (err) {
+      showResult();
+    }
+    return;
+  }
+  showResult();
 }
 
 // ---------- リザルト ----------
 function showResult() {
-  const st = state.session.stats;
-  $('result-title').textContent = `第${state.chapter}章`;
+  const isEndless = state.mode === 'endless' && state.run;
+  const st = isEndless ? state.run.totalStats : state.session.stats;
+  const lastChapter = state.index.chapters[state.index.chapters.length - 1].chapter;
+
+  if (isEndless) {
+    const completed = st.clearedChapters >= state.run.chapterCount;
+    $('result-kicker').textContent = completed ? '完全クリア！' : '章クリア！';
+    $('result-title').textContent = completed
+      ? `全${state.run.chapterCount}章走破！完全クリア！`
+      : `第${state.chapter}章クリア`;
+    $('result-paras').textContent =
+      `${st.clearedChapters} / ${state.run.chapterCount} 章 ・ ${state.run.totalParagraphs} 段落`;
+    $('btn-next').hidden = true;
+    $('btn-retry').textContent = completed ? 'もう一度（第1章から）' : '第1章からやり直す';
+    $('btn-retry').dataset.action = 'endless-restart';
+  } else {
+    $('result-kicker').textContent = '章クリア！';
+    $('result-title').textContent = `第${state.chapter}章`;
+    $('result-paras').textContent = `${st.paragraphCount} 段落`;
+    $('btn-next').hidden = false;
+    $('btn-retry').textContent = 'もう一度';
+    $('btn-retry').dataset.action = 'retry';
+    const hasNext = state.chapter < lastChapter;
+    $('btn-next').disabled = !hasNext;
+    $('btn-next').textContent = hasNext ? `第${state.chapter + 1}章へ` : '最終章です';
+  }
+
   $('result-correct').textContent = st.correct;
   $('result-miss').textContent = st.miss;
   $('result-acc').textContent = `${st.accuracy.toFixed(1)}%`;
   $('result-kpm').textContent = `${st.kpm.toFixed(0)} KPM`;
   $('result-time').textContent = `${st.elapsedSeconds.toFixed(1)}秒`;
-  $('result-paras').textContent = `${st.paragraphCount} 段落`;
-  const idx = state.index.chapters.findIndex((c) => c.chapter === state.chapter);
-  const hasNext = idx >= 0 && idx + 1 < state.index.chapters.length;
-  $('btn-next').disabled = !hasNext;
-  $('btn-next').textContent = hasNext ? `第${state.chapter + 1}章へ` : '最終章です';
   show('view-result');
 }
 
@@ -221,7 +328,25 @@ function show(id) {
 }
 
 function showSelect() {
+  // 章選択に戻るときはトーストも消す
+  const el = $('toast');
+  el.classList.remove('is-show');
+  el.classList.add('is-hidden');
+  clearTimeout(toastTimer);
   show('view-select');
+}
+
+// ---------- モード切替 ----------
+function setMode(mode) {
+  state.mode = mode;
+  const endless = mode === 'endless';
+  $('mode-normal').classList.toggle('is-active', !endless);
+  $('mode-endless').classList.toggle('is-active', endless);
+  $('mode-normal').setAttribute('aria-pressed', String(!endless));
+  $('mode-endless').setAttribute('aria-pressed', String(endless));
+  $('chapter-grid').classList.toggle('is-hidden', endless);
+  $('endless-panel').classList.toggle('is-hidden', !endless);
+  $('select-note').hidden = endless;
 }
 
 // ---------- 初期化 ----------
@@ -229,13 +354,23 @@ async function init() {
   $('btn-back').addEventListener('click', showSelect);
   $('btn-skip').addEventListener('click', skipParagraph);
   $('btn-menu').addEventListener('click', showSelect);
-  $('btn-retry').addEventListener('click', () => { show('view-game'); beginSession(); });
+  $('btn-retry').addEventListener('click', () => {
+    if ($('btn-retry').dataset.action === 'endless-restart') {
+      startEndless(state.index);
+    } else {
+      show('view-game');
+      beginSession();
+    }
+  });
   $('btn-next').addEventListener('click', () => {
     const idx = state.index.chapters.findIndex((c) => c.chapter === state.chapter);
     if (idx >= 0 && idx + 1 < state.index.chapters.length) {
       startChapter(state.index, state.index.chapters[idx + 1].chapter);
     }
   });
+  $('mode-normal').addEventListener('click', () => setMode('normal'));
+  $('mode-endless').addEventListener('click', () => setMode('endless'));
+  $('btn-endless-start').addEventListener('click', () => startEndless(state.index));
   window.addEventListener('keydown', handleKey);
   $('text-panel').addEventListener('click', () => $('text-panel').focus());
 
@@ -243,6 +378,7 @@ async function init() {
     const index = await loadIndex();
     state.index = index;
     renderChapters(index);
+    setMode('normal');
   } catch (err) {
     $('select-note').textContent =
       `データを読み込めませんでした：${err.message}。ローカルサーバー（例: python3 -m http.server）で開いてください。`;
