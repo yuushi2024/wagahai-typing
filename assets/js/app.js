@@ -1,8 +1,8 @@
 // 画面の制御（章選択 → プレイ → リザルト）
-import { TypingSession, EndlessRun } from './engine.js';
-import { tokensForParagraph } from './align.js';
-import { canonicalRomaji, buildSegments } from './romaji.js';
-import { SoundFX } from './sound.js';
+import { TypingSession, EndlessRun } from './engine.js?v=3';
+import { tokensForParagraph } from './align.js?v=3';
+import { canonicalRomaji, buildSegments } from './romaji.js?v=3';
+import { SoundFX } from './sound.js?v=3';
 
 const $ = (id) => document.getElementById(id);
 
