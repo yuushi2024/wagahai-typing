@@ -2,7 +2,8 @@
 """吾輩は猫である タイピングゲーム用データ生成スクリプト.
 
 青空文庫の作品ID 789（夏目漱石「吾輩は猫である」）のルビ付きテキストを取得し、
-ヘッダー/フッターの除去・ルビ解析・読み補完を行って、章ごとの JSON を出力する。
+ヘッダー/フッターの除去・ルビ解析・高精度形態素解析（UniDic/fugashi）による読み補完を行って、
+章ごとの JSON を出力する。
 
 使い方:
     python scripts/generate_data.py                # data/raw のテキストを使用
@@ -20,10 +21,21 @@ import zipfile
 from io import BytesIO
 from pathlib import Path
 
+# /workspace/.python_packages も import パスに追加
+_PKGS = Path("/workspace/.python_packages")
+if _PKGS.exists() and str(_PKGS) not in sys.path:
+    sys.path.insert(0, str(_PKGS))
+
+try:
+    import fugashi
+    _HAS_FUGASHI = True
+except ImportError:
+    _HAS_FUGASHI = False
+
 try:
     from pykakasi import kakasi
-except ImportError:  # pragma: no cover - 依存関係の案内
-    sys.stderr.write("pykakasi が必要です。 pip install -r requirements.txt\n")
+except ImportError:  # pragma: no cover
+    sys.stderr.write("pykakasi または fugashi が必要です。\n")
     raise
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -50,9 +62,30 @@ KANJI_NUM = {
     "六": 6, "七": 7, "八": 8, "九": 9, "十": 10, "十一": 11,
 }
 
+# 明治文学・漱石特有の慣用読み補正
+CUSTOM_READINGS = {
+    "人間中": "にんげんじゅう",
+    "一樹の蔭": "いちじゅのかげ",
+    "勤勉家": "きんべんか",
+    "三馬": "さんま",
+    "第一毛": "だいいちけ",
+    "見始": "みはじめ",
+    "這入": "はい",
+    "御台所": "おだいどころ",
+}
+
 
 def _kakasi():
     return kakasi()
+
+
+def _fugashi_tagger():
+    if _HAS_FUGASHI:
+        try:
+            return fugashi.Tagger()
+        except Exception:
+            return None
+    return None
 
 
 def download_raw_text(dest: Path = RAW_TEXT) -> Path:
@@ -125,11 +158,35 @@ def is_kanji(ch: str) -> bool:
     return bool(KANJI_RE.match(ch))
 
 
-def parse_ruby(cleaned: str, kks) -> tuple[str, str]:
+def _text_to_hiragana_unidic(text: str, tagger, kks) -> str:
+    """UniDic を用いて高精度にひらがな読みへ変換し、未解決の漢字は pykakasi で補完する。"""
+    # 既知の慣用句を先行置換
+    for word, reading in CUSTOM_READINGS.items():
+        text = text.replace(word, reading)
+
+    words = list(tagger(text))
+    res = []
+    for i, w in enumerate(words):
+        surf = w.surface
+        # 「〜中」の接尾辞判定（人間中、世界中、日本中、一日中、部屋中など）
+        if surf == "中" and i > 0 and words[i - 1].surface in ("人間", "世界", "日本", "一日", "家", "部屋", "国", "町", "体"):
+            res.append("じゅう")
+            continue
+        kana = w.feature.kana
+        if not kana or kana == "*" or KANJI_RE.search(kana or ""):
+            # 未知の漢字は pykakasi で安全に補完
+            fallback = "".join(x["hira"] for x in kks.convert(surf))
+            res.append(kata_to_hira(fallback))
+        else:
+            res.append(kata_to_hira(kana))
+    return "".join(res)
+
+
+def parse_ruby(cleaned: str, kks, tagger=None) -> tuple[str, str]:
     """本文 1 段落を (原文, ひらがな読み) に変換する。
 
     青空文庫のルビ（｜漢字《るび》 / 漢字《るび》）を最優先で適用し、
-    ルビのない部分は pykakasi で読みを補完する。
+    ルビのない部分は UniDic(fugashi) または pykakasi で読みを高精度補完する。
     """
     units: list[tuple[str, str | None]] = []  # (surface, ruby or None)
     plain = ""
@@ -187,10 +244,13 @@ def parse_ruby(cleaned: str, kks) -> tuple[str, str]:
         if ruby is not None:
             reading_parts.append(kata_to_hira(ruby))
         else:
-            reading_parts.append(kata_to_hira("".join(x["hira"] for x in kks.convert(text))))
+            if tagger is not None:
+                reading_parts.append(_text_to_hiragana_unidic(text, tagger, kks))
+            else:
+                reading_parts.append(kata_to_hira("".join(x["hira"] for x in kks.convert(text))))
 
     reading = unicodedata.normalize("NFC", "".join(reading_parts))
-    # pykakasi は「漢字＋っ」を「くっっ」のように促音重複させることがあるため補正
+    # 促音の連続重複を補正
     reading = re.sub(r"っ{2,}", "っ", reading)
     return surface, reading
 
@@ -218,6 +278,7 @@ def split_chapters(body: str) -> list[tuple[int, list[str]]]:
 
 def build_dataset(text: str) -> dict:
     kks = _kakasi()
+    tagger = _fugashi_tagger()
     body = strip_header_footer(text)
     chapters_raw = split_chapters(body)
 
@@ -230,7 +291,7 @@ def build_dataset(text: str) -> dict:
             cleaned = clean_annotations(line).strip("\u3000").strip()
             if not cleaned:
                 continue
-            surface, reading = parse_ruby(cleaned, kks)
+            surface, reading = parse_ruby(cleaned, kks, tagger)
             if not surface:
                 continue
             entry_id += 1
@@ -250,70 +311,62 @@ def build_dataset(text: str) -> dict:
             "paragraphs": paragraphs,
         })
 
-    return {
-        "meta": {
-            "title": "吾輩は猫である",
-            "author": "夏目漱石",
-            "work_id": 789,
-            "source": "青空文庫 (https://www.aozora.gr.jp/cards/000148/card789.html)",
-            "chapter_count": len(chapters_out),
-            "paragraph_count": len(combined),
-            "license": "青空文庫 / パブリックドメイン（著作権保護期間満了）",
-        },
-        "chapters": chapters_out,
-    }
-
-
-def write_outputs(dataset: dict) -> None:
-    CHAPTER_DIR.mkdir(parents=True, exist_ok=True)
-    for ch in dataset["chapters"]:
-        path = CHAPTER_DIR / f"chapter{ch['chapter']:02d}.json"
-        path.write_text(json.dumps(ch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-    # 章選択画面が段落数などを先読みできるよう、軽量な索引を出力する
-    index = {
-        "title": dataset["meta"]["title"],
-        "author": dataset["meta"]["author"],
-        "chapter_count": dataset["meta"]["chapter_count"],
-        "paragraph_count": dataset["meta"]["paragraph_count"],
+    index_data = {
+        "title": "吾輩は猫である",
+        "author": "夏目漱石",
+        "chapter_count": len(chapters_out),
+        "paragraph_count": len(combined),
         "chapters": [
             {
-                "chapter": ch["chapter"],
-                "title": ch["title"],
-                "paragraph_count": ch["paragraph_count"],
+                "chapter": c["chapter"],
+                "title": c["title"],
+                "paragraph_count": c["paragraph_count"],
             }
-            for ch in dataset["chapters"]
+            for c in chapters_out
         ],
     }
-    (CHAPTER_DIR / "index.json").write_text(
-        json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
 
-    COMBINED_JSON.write_text(
-        json.dumps(dataset, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    return {
+        "index": index_data,
+        "chapters": chapters_out,
+        "combined": combined,
+    }
+
+
+def write_dataset(dataset: dict, out_dir: Path = CHAPTER_DIR, combined_path: Path = COMBINED_JSON) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    index_path = out_dir / "index.json"
+    index_path.write_text(json.dumps(dataset["index"], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    for ch in dataset["chapters"]:
+        p = out_dir / f"chapter{ch['chapter']:02d}.json"
+        p.write_text(json.dumps(ch, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    combined_path.parent.mkdir(parents=True, exist_ok=True)
+    combined_data = {
+        "meta": dataset["index"],
+        "chapters": dataset["chapters"],
+    }
+    combined_path.write_text(
+        json.dumps(combined_data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--download", action="store_true", help="青空文庫からテキストを再取得する")
-    parser.add_argument("--raw", type=Path, default=RAW_TEXT, help="使用する生テキスト(UTF-8)")
+    parser.add_argument("--download", action="store_true", help="青空文庫から最新 ZIP を再ダウンロードする")
     args = parser.parse_args()
 
-    if args.download or not args.raw.exists():
-        print(f"downloading raw text -> {args.raw}")
-        download_raw_text(args.raw)
+    if args.download or not RAW_TEXT.exists():
+        download_raw_text(RAW_TEXT)
 
-    text = args.raw.read_text(encoding="utf-8")
+    text = RAW_TEXT.read_text(encoding="utf-8")
     dataset = build_dataset(text)
-    write_outputs(dataset)
-
-    meta = dataset["meta"]
-    print(f"chapters: {meta['chapter_count']}")
-    print(f"paragraphs: {meta['paragraph_count']}")
-    print(f"output: {CHAPTER_DIR}/*.json, {COMBINED_JSON}")
+    write_dataset(dataset)
+    print(f"生成完了: 全 {dataset['index']['chapter_count']} 章 / {dataset['index']['paragraph_count']} 段落")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

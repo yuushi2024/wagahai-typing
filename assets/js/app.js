@@ -1,7 +1,7 @@
 // 画面の制御（章選択 → プレイ → リザルト）
 import { TypingSession, EndlessRun } from './engine.js';
 import { tokensForParagraph } from './align.js';
-import { canonicalRomaji } from './romaji.js';
+import { canonicalRomaji, buildSegments } from './romaji.js';
 import { SoundFX } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,6 +14,8 @@ const state = {
   chapterData: null,
   session: null,
   tokens: [],
+  sentences: [],
+  currentSentenceIdx: -1,
   errorTimer: null,
   mode: 'normal', // 'normal' | 'endless'
   run: null, // エンドレスモードの通算管理
@@ -112,27 +114,96 @@ function updateModeUI() {
   $('game-mode-badge').hidden = state.mode !== 'endless';
 }
 
+// ---------- 文分割ロジック ----------
+function splitTokensIntoSentences(tokens) {
+  const sentences = [];
+  let cur = [];
+  let rStart = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    cur.push({ tok, tokenIndex: i });
+    // 句点・感嘆符・疑問符・改行で文を区切る
+    const isEnd = /[。！？\n]/.test(tok.text) || tok.text.endsWith('。') || tok.text.endsWith('！') || tok.text.endsWith('？');
+    if (isEnd) {
+      const rEnd = tok.rEnd;
+      sentences.push({
+        items: cur,
+        rStart,
+        rEnd,
+        text: cur.map((c) => c.tok.text).join(''),
+        ruby: cur.map((c) => c.tok.ruby).join(''),
+      });
+      rStart = rEnd;
+      cur = [];
+    }
+  }
+  if (cur.length > 0) {
+    const rEnd = cur[cur.length - 1].tok.rEnd;
+    sentences.push({
+      items: cur,
+      rStart,
+      rEnd,
+      text: cur.map((c) => c.tok.text).join(''),
+      ruby: cur.map((c) => c.tok.ruby).join(''),
+    });
+  }
+  return sentences;
+}
+
+function getCurrentSentenceIndex() {
+  if (!state.sentences || state.sentences.length === 0) return 0;
+  const doneRuby = state.session.matcher.doneRuby;
+  for (let i = 0; i < state.sentences.length; i++) {
+    if (doneRuby < state.sentences[i].rEnd) return i;
+  }
+  return Math.max(0, state.sentences.length - 1);
+}
+
 // ---------- プレイ ----------
 function loadParagraph() {
   const p = state.session.current;
   state.tokens = tokensForParagraph(p.text, p.ruby);
+  state.sentences = splitTokensIntoSentences(state.tokens);
+  state.currentSentenceIdx = -1;
+
   const label = $('game-chapter-label');
   const kn = KANJI_CHAPTERS[state.chapter] || String(state.chapter);
   label.textContent = `第${kn}章`;
   if (state.mode === 'endless' && state.run) {
     label.textContent += `（${state.run.chapterPos + 1}/${state.run.chapterCount}）`;
   }
-  renderText();
+
+  renderSentence();
   renderGuide();
 }
 
-function renderText() {
-  const line = $('text-line');
+function renderSentence() {
+  const curIdx = getCurrentSentenceIndex();
+  // 文を打ち終えて次の文へ進んだときは澄んだ鈴音を鳴らす
+  if (curIdx > state.currentSentenceIdx && state.currentSentenceIdx >= 0) {
+    state.sound.playParagraph();
+  }
+  state.currentSentenceIdx = curIdx;
+
+  const s = state.sentences[curIdx];
+  if (!s) return;
+
+  const doneRuby = state.session.matcher.doneRuby;
+
+  // バッジ & プログレス更新
+  $('sentence-badge').textContent = `文 ${curIdx + 1} / ${state.sentences.length}`;
+  $('game-progress').textContent =
+    `段落 ${state.session.paragraphNumber} / ${state.session.paragraphCount} ・ 文 ${curIdx + 1} / ${state.sentences.length}`;
+
+  const line = $('sentence-line');
   line.innerHTML = '';
-  state.tokens.forEach((tok, i) => {
+
+  let markedCurrent = false;
+  s.items.forEach(({ tok, tokenIndex }) => {
     const span = document.createElement('span');
     span.className = 'tok';
-    span.dataset.i = String(i);
+    span.dataset.i = String(tokenIndex);
+
     if (tok.ruby) {
       const ruby = document.createElement('ruby');
       const base = document.createElement('span');
@@ -149,29 +220,32 @@ function renderText() {
       base.textContent = tok.text;
       span.appendChild(base);
     }
+
+    if (tok.ruby.length > 0) {
+      if (tok.rEnd <= doneRuby) {
+        span.classList.add('done');
+      } else if (tok.rStart <= doneRuby && !markedCurrent) {
+        span.classList.add('current');
+        markedCurrent = true;
+      }
+    }
     line.appendChild(span);
   });
-  refreshHighlight();
-}
 
-function refreshHighlight() {
-  const doneRuby = state.session.matcher.doneRuby;
-  let pos = 0;
-  let markedCurrent = false;
-  for (const span of $('text-line').children) {
-    const i = Number(span.dataset.i);
-    const tok = state.tokens[i];
-    const start = pos;
-    const end = pos + tok.ruby.length;
-    pos = end;
-    span.classList.remove('done', 'current');
-    if (tok.ruby.length === 0) continue;
-    if (end <= doneRuby) {
-      span.classList.add('done');
-    } else if (start <= doneRuby && !markedCurrent) {
-      span.classList.add('current');
-      markedCurrent = true;
-    }
+  // 次の文プレビュー
+  const np = $('next-preview');
+  const npText = $('np-text');
+  if (curIdx + 1 < state.sentences.length) {
+    np.classList.remove('is-hidden');
+    np.style.display = 'flex';
+    npText.textContent = state.sentences[curIdx + 1].text;
+  } else if (state.session.hasNextParagraph) {
+    np.classList.remove('is-hidden');
+    np.style.display = 'flex';
+    npText.textContent = '（次の段落へ続きます）';
+  } else {
+    np.classList.add('is-hidden');
+    np.style.display = 'none';
   }
 }
 
@@ -185,20 +259,39 @@ function renderGuide() {
     $('guide-romaji').innerHTML =
       `<span class="typed">${escapeHtml(cur.typed)}</span><span class="rest">${escapeHtml(cur.option.slice(cur.typed.length))}</span>`;
   }
-  // この段落のローマ字ガイド（現在位置の前後だけを表示）
-  const done = state.session.matcher.done;
+
+  // 現在の文に対応するローマ字ガイドを表示
+  const curIdx = state.currentSentenceIdx >= 0 ? state.currentSentenceIdx : getCurrentSentenceIndex();
+  const s = state.sentences[curIdx];
+  if (!s) return;
+
   const segs = state.session.segments;
-  const from = Math.max(0, done - 3);
-  const to = Math.min(segs.length, done + 12);
-  const parts = [];
-  if (from > 0) parts.push('…');
-  for (let i = from; i < to; i += 1) {
-    const r = escapeHtml(canonicalRomaji(segs[i]));
-    if (i < done) parts.push(`<b>${r}</b>`);
-    else if (i === done) parts.push(`<span class="cur">${r}</span>`);
-    else parts.push(r);
+  let rubyPos = 0;
+  const sentenceSegs = [];
+
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i];
+    const segRubyLen = seg.kana.length;
+    const segRubyEnd = rubyPos + segRubyLen;
+
+    if (segRubyEnd > s.rStart && rubyPos < s.rEnd) {
+      sentenceSegs.push({ seg, idx: i });
+    }
+    rubyPos = segRubyEnd;
   }
-  if (to < segs.length) parts.push('…');
+
+  const parts = [];
+  sentenceSegs.forEach(({ seg, idx }) => {
+    const r = escapeHtml(canonicalRomaji(seg));
+    if (idx < state.session.matcher.done) {
+      parts.push(`<b>${r}</b>`);
+    } else if (idx === state.session.matcher.done) {
+      parts.push(`<span class="cur">${r}</span>`);
+    } else {
+      parts.push(r);
+    }
+  });
+
   $('guide-line').innerHTML = parts.join(' ');
 }
 
@@ -214,7 +307,6 @@ function updateStats() {
   $('stat-miss').textContent = st.miss;
   $('stat-acc').textContent = `${st.accuracy.toFixed(1)}%`;
   $('stat-kpm').innerHTML = `${st.kpm.toFixed(0)} <small>KPM</small>`;
-  $('game-progress').textContent = `段落 ${state.session.paragraphNumber} / ${state.session.paragraphCount}`;
 }
 
 // 画面下部のトースト通知
@@ -232,13 +324,15 @@ function showToast(text) {
   }, 2000);
 }
 
+// 間違えたときのアニメーション（メインの打鍵盤全体を揺らす）
 function flashError() {
-  const panel = $('text-panel');
-  panel.classList.remove('is-error');
-  void panel.offsetWidth;
-  panel.classList.add('is-error');
+  const board = $('typing-board');
+  if (!board) return;
+  board.classList.remove('is-error');
+  void board.offsetWidth;
+  board.classList.add('is-error');
   clearTimeout(state.errorTimer);
-  state.errorTimer = setTimeout(() => panel.classList.remove('is-error'), 220);
+  state.errorTimer = setTimeout(() => board.classList.remove('is-error'), 220);
 }
 
 function handleKey(e) {
@@ -267,20 +361,37 @@ function handleKey(e) {
     handleChapterComplete();
     return;
   }
-  refreshHighlight();
+  renderSentence();
   renderGuide();
 }
 
-function skipParagraph() {
+function skipSentenceOrParagraph() {
   if (!state.session || state.session.finished) return;
-  const r = state.session.skipParagraph();
-  updateStats();
-  if (r.type === 'chapter-complete') {
-    state.sound.playChapter();
-    handleChapterComplete();
-    return;
+  const curIdx = getCurrentSentenceIndex();
+  const s = state.sentences[curIdx];
+
+  // 文をスキップする（この文の読みの末尾まで matcher を進める）
+  while (state.session.matcher.doneRuby < s.rEnd && !state.session.matcher.complete) {
+    const cur = state.session.matcher.current();
+    if (!cur) break;
+    const nextChar = cur.option[cur.typed.length] || 'a';
+    state.session.input(nextChar);
   }
-  loadParagraph();
+
+  updateStats();
+  if (state.session.matcher.complete) {
+    if (state.session.hasNextParagraph) {
+      state.sound.playParagraph();
+      loadParagraph();
+    } else {
+      state.sound.playChapter();
+      handleChapterComplete();
+      return;
+    }
+  } else {
+    renderSentence();
+    renderGuide();
+  }
 }
 
 // 章の最終段落を打ち終えたときの処理
@@ -424,7 +535,7 @@ async function init() {
   initSound();
 
   $('btn-back').addEventListener('click', showSelect);
-  $('btn-skip').addEventListener('click', skipParagraph);
+  $('btn-skip').addEventListener('click', skipSentenceOrParagraph);
   $('btn-menu').addEventListener('click', showSelect);
   $('btn-retry').addEventListener('click', () => {
     if ($('btn-retry').dataset.action === 'endless-restart') {
@@ -444,7 +555,7 @@ async function init() {
   $('mode-endless').addEventListener('click', () => setMode('endless'));
   $('btn-endless-start').addEventListener('click', () => startEndless(state.index));
   window.addEventListener('keydown', handleKey);
-  $('text-panel').addEventListener('click', () => $('text-panel').focus());
+  $('typing-board').addEventListener('click', () => $('typing-board').focus());
 
   try {
     const index = await loadIndex();

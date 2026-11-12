@@ -609,97 +609,39 @@ body {
   gap: 20px;
 }
 
-/* ローマ字・かなガイド */
-.romaji-guide {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 18px 22px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-sm);
-}
-
-.guide-current {
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
-}
-
-.guide-kana-box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2em;
-  padding: 2px 10px;
-  border-radius: 8px;
-  background: var(--vermilion-soft);
-  border: 1px solid var(--vermilion-border);
-}
-
-.guide-kana {
-  font-size: 2.1rem;
-  font-weight: 700;
-  color: var(--vermilion);
-  font-family: var(--font-serif);
-  line-height: 1.1;
-}
-
-.guide-romaji {
-  font-family: var(--font-mono);
-  font-size: 1.8rem;
-  letter-spacing: 0.08em;
-  font-weight: 500;
-}
-.guide-romaji .typed { color: var(--good); font-weight: 600; }
-.guide-romaji .rest { color: var(--ink-faint); }
-
-.guide-line {
-  font-family: var(--font-mono);
-  font-size: 0.94rem;
-  color: var(--ink-faint);
-  min-height: 1.3em;
-  letter-spacing: 0.08em;
-  word-break: break-all;
-  padding-top: 4px;
-  border-top: 1px dashed var(--border-light);
-}
-.guide-line b { color: var(--ink-dim); font-weight: 600; }
-.guide-line .cur {
-  color: var(--vermilion);
-  font-weight: 700;
-  border-bottom: 2px solid var(--vermilion);
-}
-
-/* ---------- 原稿用紙・書籍見開き風テキストパネル ---------- */
-.text-panel-wrapper {
+/* ---------- メイン打鍵盤（1文集中・ルビ・ローマ字・ミス時アニメーション統合） ---------- */
+.typing-board-wrapper {
   position: relative;
+  width: 100%;
 }
 
-.text-panel {
+.typing-board {
   position: relative;
-  padding: 38px 34px;
-  border: 1px solid var(--border-dark);
+  padding: 34px 32px 28px;
+  border: 2px solid var(--border-dark);
   outline: 1px solid var(--border);
   outline-offset: -8px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--surface-card);
-  box-shadow: var(--shadow-card);
-  min-height: 200px;
+  box-shadow: var(--shadow-book);
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   cursor: text;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.text-panel:focus {
+.typing-board:focus {
   border-color: var(--amber);
   outline-color: var(--amber-soft);
 }
 
-.text-panel.is-error {
+/* 間違えたときのアニメーション（打鍵盤全体が揺れる） */
+.typing-board.is-error {
   border-color: var(--bad);
   outline-color: var(--bad);
-  box-shadow: 0 0 0 4px var(--bad-soft), var(--shadow-card);
+  box-shadow: 0 0 0 5px var(--bad-soft), var(--shadow-book);
   animation: inkShake 0.18s ease;
 }
 
@@ -709,11 +651,127 @@ body {
   75% { transform: translateX(5px); }
 }
 
-.text-line {
-  font-size: clamp(1.4rem, 3.4vw, 1.95rem);
-  line-height: 2.7;
-  letter-spacing: 0.05em;
+/* 上段：現在打つべき文字ナビ ＆ 文進捗バッジ */
+.board-top-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed var(--border-light);
+}
+
+.guide-current-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.guide-kana-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2em;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: var(--vermilion-soft);
+  border: 1px solid var(--vermilion-border);
+}
+
+.guide-kana {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--vermilion);
+  font-family: var(--font-serif);
+  line-height: 1.1;
+}
+
+.guide-romaji {
+  font-family: var(--font-mono);
+  font-size: 1.85rem;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+.guide-romaji .typed { color: var(--good); font-weight: 600; }
+.guide-romaji .rest { color: var(--ink-faint); }
+
+.sentence-badge {
+  font-size: 0.78rem;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  letter-spacing: 0.06em;
+}
+
+/* 中段：現在の一文（漢字＋ルビ） */
+.sentence-box {
+  padding: 10px 4px;
+  text-align: center;
+}
+
+.sentence-line {
+  font-size: clamp(1.8rem, 4.4vw, 2.5rem);
+  line-height: 2.5;
+  letter-spacing: 0.06em;
   word-break: break-word;
+  font-family: var(--font-serif);
+}
+
+/* 下段：この一文のローマ字ガイドライン */
+.guide-line-box {
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-light);
+  text-align: center;
+}
+
+.guide-line {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--ink-faint);
+  min-height: 1.3em;
+  letter-spacing: 0.1em;
+  word-break: break-all;
+}
+.guide-line b { color: var(--good); font-weight: 600; }
+.guide-line .cur {
+  color: var(--vermilion);
+  font-weight: 700;
+  border-bottom: 2px solid var(--vermilion);
+  padding-bottom: 1px;
+}
+
+/* 次の文プレビュー */
+.next-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto;
+  padding: 8px 20px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  font-size: 0.88rem;
+  color: var(--ink-faint);
+  max-width: 620px;
+  box-shadow: var(--shadow-sm);
+}
+
+.np-label {
+  color: var(--amber);
+  font-weight: 600;
+  font-family: var(--font-serif);
+  flex-shrink: 0;
+}
+
+.np-text {
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-serif);
 }
 
@@ -957,5 +1015,5 @@ body {
   .topbar { flex-wrap: wrap; }
   .mode-select { display: flex; flex-direction: column; width: 100%; }
   .mode-btn { width: 100%; }
-  .text-panel { padding: 26px 18px; }
+  .typing-board { padding: 24px 18px; }
 }

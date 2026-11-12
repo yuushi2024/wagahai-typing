@@ -139,22 +139,36 @@
       </div>
 
       <main class="play">
-        <!-- ローマ字・かなガイド -->
-        <div class="romaji-guide" aria-hidden="true">
-          <div class="guide-current">
-            <span class="guide-kana-box">
-              <span class="guide-kana" id="guide-kana">あ</span>
-            </span>
-            <span class="guide-romaji" id="guide-romaji"></span>
+        <!-- メイン打鍵盤（1文集中・ルビ・ローマ字・ミス時アニメーション統合） -->
+        <div class="typing-board-wrapper">
+          <div class="typing-board" id="typing-board" tabindex="0" aria-label="タイピング盤">
+            <!-- 現在打つべき文字と進捗 -->
+            <div class="board-top-nav">
+              <div class="guide-current-bar">
+                <span class="guide-kana-box">
+                  <span class="guide-kana" id="guide-kana">わ</span>
+                </span>
+                <span class="guide-romaji" id="guide-romaji"></span>
+              </div>
+              <span class="sentence-badge" id="sentence-badge">文 1 / 2</span>
+            </div>
+
+            <!-- 現在の1文（漢字＋ルビ） -->
+            <div class="sentence-box">
+              <div class="sentence-line" id="sentence-line"></div>
+            </div>
+
+            <!-- この1文のローマ字ガイドライン -->
+            <div class="guide-line-box">
+              <div class="guide-line" id="guide-line"></div>
+            </div>
           </div>
-          <div class="guide-line" id="guide-line"></div>
         </div>
 
-        <!-- 原文とルビの表示パネル -->
-        <div class="text-panel-wrapper">
-          <div class="text-panel" id="text-panel" tabindex="0" aria-label="タイピング対象の本文">
-            <div class="text-line" id="text-line"></div>
-          </div>
+        <!-- 次の文のプレビュー -->
+        <div class="next-preview" id="next-preview">
+          <span class="np-label">次：</span>
+          <span class="np-text" id="np-text">名前はまだ無い。</span>
         </div>
 
         <p class="hint" id="hint">⌨️ キーボードでローマ字を入力してください（どの綴りでも打てます）</p>
