@@ -98,11 +98,23 @@
           <h2 class="endless-title">全巻一気走破の旅</h2>
           <p class="endless-lead">
             第一章の冒頭から最終第十一章の結びまで、章をまたいで自動で次々と読み込み継続します。<br>
-            スコアは全巻を通じた通算で集計されます。あなたの読書タイピング力を試してみませんか。
+            スコアは全巻を通じた通算で集計され、進行状況は自動保存（Cookie & 保管）されます。
           </p>
-          <button id="btn-endless-start" class="btn btn-primary btn-lg" type="button">
-            ▶ 第一章から全巻スタート
-          </button>
+          <div id="endless-saved-banner" class="endless-saved-banner is-hidden">
+            <span class="esb-icon">💾</span>
+            <div class="esb-body">
+              <strong class="esb-title">前回の続きが保存されています</strong>
+              <span class="esb-detail" id="esb-detail">第1章 ・ 段落 1 まで進んでいます</span>
+            </div>
+          </div>
+          <div class="endless-actions">
+            <button id="btn-endless-resume" class="btn btn-primary btn-lg is-hidden" type="button">
+              ▶ 続きから再開する
+            </button>
+            <button id="btn-endless-start" class="btn btn-primary btn-lg" type="button">
+              ▶ 第一章から全巻スタート
+            </button>
+          </div>
         </div>
       </div>
     </section>

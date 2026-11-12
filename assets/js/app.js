@@ -7,6 +7,7 @@ import { SoundFX } from './sound.js';
 const $ = (id) => document.getElementById(id);
 
 const KANJI_CHAPTERS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一'];
+const COOKIE_KEY = 'wagahai_endless_save';
 
 const state = {
   index: null,
@@ -21,6 +22,42 @@ const state = {
   run: null, // エンドレスモードの通算管理
   sound: new SoundFX(),
 };
+
+// ---------- Cookie & LocalStorage 保存・復元 ----------
+function saveEndlessProgress(saveObj) {
+  const jsonStr = JSON.stringify(saveObj);
+  try {
+    const encoded = encodeURIComponent(jsonStr);
+    const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toUTCString();
+    document.cookie = `${COOKIE_KEY}=${encoded}; expires=${expires}; path=/; SameSite=Lax`;
+  } catch (_) {}
+  try {
+    localStorage.setItem(COOKIE_KEY, jsonStr);
+  } catch (_) {}
+}
+
+function loadEndlessProgress() {
+  try {
+    const match = document.cookie.match(new RegExp('(?:^|; )' + COOKIE_KEY + '=([^;]*)'));
+    if (match && match[1]) {
+      return JSON.parse(decodeURIComponent(match[1]));
+    }
+  } catch (_) {}
+  try {
+    const item = localStorage.getItem(COOKIE_KEY);
+    if (item) return JSON.parse(item);
+  } catch (_) {}
+  return null;
+}
+
+function clearEndlessProgress() {
+  try {
+    document.cookie = `${COOKIE_KEY}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax`;
+  } catch (_) {}
+  try {
+    localStorage.removeItem(COOKIE_KEY);
+  } catch (_) {}
+}
 
 // 章データの取得
 async function fetchChapterData(chapterNo) {
@@ -72,11 +109,33 @@ async function startChapter(index, chapterNo) {
   beginSession();
 }
 
-// エンドレスモード: 第1章から全章通しで開始
+// エンドレスモード: 最初から新規開始
 async function startEndless(index) {
+  clearEndlessProgress();
   state.index = index;
   state.run = new EndlessRun(index);
   await enterRunChapter(index.chapters[0].chapter);
+}
+
+// エンドレスモード: Cookie/Storage のセーブデータから再開
+async function resumeEndless(index) {
+  const saved = loadEndlessProgress();
+  if (!saved || !saved.chapter) {
+    return startEndless(index);
+  }
+  state.index = index;
+  state.run = new EndlessRun(index);
+  const targetChapter = saved.chapter;
+  const data = await fetchChapterData(targetChapter);
+  state.chapter = targetChapter;
+  state.chapterData = data;
+  state.session = state.run.resume(data.paragraphs, saved);
+  show('view-game');
+  updateModeUI();
+  loadParagraph();
+  updateStats();
+  const kn = KANJI_CHAPTERS[targetChapter] || String(targetChapter);
+  showToast(`🐾 第${kn}章 ・ 段落 ${saved.paragraphIndex + 1} から再開しました！`);
 }
 
 // エンドレスの現在章を読み込んでセッションを開始する
@@ -171,6 +230,8 @@ function loadParagraph() {
   label.textContent = `第${kn}章`;
   if (state.mode === 'endless' && state.run) {
     label.textContent += `（${state.run.chapterPos + 1}/${state.run.chapterCount}）`;
+    // エンドレス進行状況を自動保存
+    saveEndlessProgress(state.run.exportState());
   }
 
   renderSentence();
@@ -182,6 +243,9 @@ function renderSentence() {
   // 文を打ち終えて次の文へ進んだときは澄んだ鈴音を鳴らす
   if (curIdx > state.currentSentenceIdx && state.currentSentenceIdx >= 0) {
     state.sound.playParagraph();
+    if (state.mode === 'endless' && state.run) {
+      saveEndlessProgress(state.run.exportState());
+    }
   }
   state.currentSentenceIdx = curIdx;
 
@@ -321,7 +385,7 @@ function showToast(text) {
   toastTimer = setTimeout(() => {
     el.classList.remove('is-show');
     el.classList.add('is-hidden');
-  }, 2000);
+  }, 2500);
 }
 
 // 間違えたときのアニメーション（メインの打鍵盤全体を揺らす）
@@ -400,6 +464,7 @@ async function handleChapterComplete() {
     const cleared = state.chapter;
     const next = state.run.nextChapterNumber;
     if (next === null) {
+      clearEndlessProgress();
       state.run.advance();
       showResult();
       return;
@@ -476,6 +541,7 @@ function showSelect() {
   el.classList.remove('is-show');
   el.classList.add('is-hidden');
   clearTimeout(toastTimer);
+  updateEndlessPanelUI();
   show('view-select');
 }
 
@@ -490,6 +556,36 @@ function setMode(mode) {
   $('chapter-grid').classList.toggle('is-hidden', endless);
   $('endless-panel').classList.toggle('is-hidden', !endless);
   $('select-note').hidden = endless;
+  if (endless) {
+    updateEndlessPanelUI();
+  }
+}
+
+function updateEndlessPanelUI() {
+  const saved = loadEndlessProgress();
+  const banner = $('endless-saved-banner');
+  const btnResume = $('btn-endless-resume');
+  const btnStart = $('btn-endless-start');
+
+  if (saved && saved.chapter) {
+    const kn = KANJI_CHAPTERS[saved.chapter] || String(saved.chapter);
+    const totalCorrect = (saved.totalCorrect || 0) + (saved.sessionCorrect || 0);
+    $('esb-detail').textContent =
+      `第${kn}章 ・ 段落 ${saved.paragraphIndex + 1} まで読了 （累計打鍵: ${totalCorrect.toLocaleString()} 打）`;
+    banner.classList.remove('is-hidden');
+    banner.style.display = 'flex';
+    btnResume.classList.remove('is-hidden');
+    btnResume.style.display = 'inline-flex';
+    btnStart.textContent = '↺ 最初からやり直す（第一章）';
+    btnStart.className = 'btn btn-ghost btn-lg';
+  } else {
+    banner.classList.add('is-hidden');
+    banner.style.display = 'none';
+    btnResume.classList.add('is-hidden');
+    btnResume.style.display = 'none';
+    btnStart.textContent = '▶ 第一章から全巻スタート';
+    btnStart.className = 'btn btn-primary btn-lg';
+  }
 }
 
 // ---------- ユーティリティ制御（テーマ・効果音） ----------
@@ -554,6 +650,7 @@ async function init() {
   $('mode-normal').addEventListener('click', () => setMode('normal'));
   $('mode-endless').addEventListener('click', () => setMode('endless'));
   $('btn-endless-start').addEventListener('click', () => startEndless(state.index));
+  $('btn-endless-resume').addEventListener('click', () => resumeEndless(state.index));
   window.addEventListener('keydown', handleKey);
   $('typing-board').addEventListener('click', () => $('typing-board').focus());
 

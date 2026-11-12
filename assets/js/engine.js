@@ -13,12 +13,12 @@ function kpmOf(correct, seconds) {
 
 export class TypingSession {
   // now: テスト用に時刻取得を差し替えられるようにする
-  constructor(paragraphs, now = () => performance.now()) {
+  constructor(paragraphs, now = () => performance.now(), startIndex = 0, initialCorrect = 0, initialMiss = 0) {
     this.paragraphs = paragraphs;
     this.now = now;
-    this.index = 0;
-    this.correct = 0;
-    this.miss = 0;
+    this.index = Math.min(Math.max(0, startIndex), paragraphs.length - 1);
+    this.correct = initialCorrect;
+    this.miss = initialMiss;
     this.startTime = null;
     this.endTime = null;
     this.finished = false;
@@ -182,6 +182,40 @@ export class EndlessRun {
     if (this.startedAt === null) this.startedAt = this.now();
     this.session = new TypingSession(paragraphs, this.now);
     return this.session;
+  }
+
+  // 保存された状態から再開する
+  resume(paragraphs, saved) {
+    this.chapterPos = saved.chapterPos || 0;
+    this.totalCorrect = saved.totalCorrect || 0;
+    this.totalMiss = saved.totalMiss || 0;
+    this.totalParagraphs = saved.totalParagraphs || 0;
+    this.clearedChapters = saved.clearedChapters || 0;
+    if (this.startedAt === null) this.startedAt = this.now();
+    this.session = new TypingSession(
+      paragraphs,
+      this.now,
+      saved.paragraphIndex || 0,
+      saved.sessionCorrect || 0,
+      saved.sessionMiss || 0,
+    );
+    return this.session;
+  }
+
+  // 保存用のスナップショットを出力する
+  exportState() {
+    return {
+      chapterPos: this.chapterPos,
+      chapter: this.chapter,
+      paragraphIndex: this.session ? this.session.index : 0,
+      totalCorrect: this.totalCorrect,
+      totalMiss: this.totalMiss,
+      totalParagraphs: this.totalParagraphs,
+      clearedChapters: this.clearedChapters,
+      sessionCorrect: this.session ? this.session.correct : 0,
+      sessionMiss: this.session ? this.session.miss : 0,
+      savedAt: Date.now(),
+    };
   }
 
   // 章クリア時に確定した集計値を取り込み、次の章へ進む。

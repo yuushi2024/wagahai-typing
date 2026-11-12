@@ -462,7 +462,53 @@ body {
   color: var(--ink-dim);
   line-height: 1.9;
   font-size: 0.94rem;
-  margin: 0 0 24px;
+  margin: 0 0 18px;
+}
+
+.endless-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.endless-saved-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber-border);
+  border-radius: var(--radius-md);
+  margin: 16px auto 22px;
+  max-width: 520px;
+  text-align: left;
+}
+
+.esb-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.esb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.esb-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--amber);
+  font-family: var(--font-serif);
+}
+
+.esb-detail {
+  font-size: 0.84rem;
+  color: var(--ink-dim);
+  font-family: var(--font-sans);
 }
 
 /* ---------- ボタン共通 ---------- */
