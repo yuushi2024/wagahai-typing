@@ -102,6 +102,7 @@ function renderChapters(index) {
 
 // 通常モード: 選ばれた章だけを読み込んで開始
 async function startChapter(index, chapterNo) {
+  state.mode = 'normal';
   state.chapterData = await fetchChapterData(chapterNo);
   state.chapter = chapterNo;
   state.index = index;
@@ -112,6 +113,7 @@ async function startChapter(index, chapterNo) {
 // エンドレスモード: 最初から新規開始
 async function startEndless(index) {
   clearEndlessProgress();
+  state.mode = 'endless';
   state.index = index;
   state.run = new EndlessRun(index);
   await enterRunChapter(index.chapters[0].chapter);
@@ -123,6 +125,7 @@ async function resumeEndless(index) {
   if (!saved || !saved.chapter) {
     return startEndless(index);
   }
+  state.mode = 'endless';
   state.index = index;
   state.run = new EndlessRun(index);
   const targetChapter = saved.chapter;
