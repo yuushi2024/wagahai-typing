@@ -1,0 +1,75 @@
+# ==============================================================================
+# 吾輩は猫である タイピング ｜ Xserver用 .htaccess 設定
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. ディレクトリ一覧表示の禁止（セキュリティ保護）
+# ------------------------------------------------------------------------------
+Options -Indexes
+
+# ------------------------------------------------------------------------------
+# 2. 文字コード & MIMEタイプ設定（文字化け・ESモジュール読み込みエラー防止）
+# ------------------------------------------------------------------------------
+AddDefaultCharset UTF-8
+
+<IfModule mod_mime.c>
+  AddType text/html;charset=UTF-8 .html
+  AddType text/css;charset=UTF-8 .css
+  AddType application/javascript;charset=UTF-8 .js .mjs
+  AddType application/json;charset=UTF-8 .json
+  AddType image/svg+xml .svg
+</IfModule>
+
+# ------------------------------------------------------------------------------
+# 3. 常時SSL（HTTPS）への自動リダイレクト
+# ------------------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+</IfModule>
+
+# ------------------------------------------------------------------------------
+# 4. Gzip圧縮転送（大容量の章JSON・JS・CSSを高速配信）
+# ------------------------------------------------------------------------------
+<IfModule mod_deflate.c>
+  SetOutputFilter DEFLATE
+  AddOutputFilterByType DEFLATE text/html
+  AddOutputFilterByType DEFLATE text/plain
+  AddOutputFilterByType DEFLATE text/css
+  AddOutputFilterByType DEFLATE application/javascript
+  AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ------------------------------------------------------------------------------
+# 5. ブラウザキャッシュ設定（表示高速化と更新即時反映のバランス）
+# ------------------------------------------------------------------------------
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 days"
+
+  # HTMLは更新がすぐ反映されるようキャッシュさせない
+  ExpiresByType text/html "access plus 0 seconds"
+
+  # スタイルシート・JavaScript（1週間キャッシュ）
+  ExpiresByType text/css "access plus 7 days"
+  ExpiresByType application/javascript "access plus 7 days"
+
+  # 章データJSON（1日キャッシュ）
+  ExpiresByType application/json "access plus 1 days"
+
+  # アイコン画像など
+  ExpiresByType image/svg+xml "access plus 30 days"
+</IfModule>
+
+# ------------------------------------------------------------------------------
+# 6. 基本セキュリティヘッダー
+# ------------------------------------------------------------------------------
+<IfModule mod_headers.c>
+  # MIMEタイプの誤判定（MIMEスニッフィング）を防止
+  Header set X-Content-Type-Options "nosniff"
+
+  # 他サイトからのiframe埋め込みによるクリックジャッキングを防止
+  Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>
