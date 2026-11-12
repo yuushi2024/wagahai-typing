@@ -22,12 +22,14 @@ AddDefaultCharset UTF-8
 
 # ------------------------------------------------------------------------------
 # 3. 常時SSL（HTTPS）への自動リダイレクト
+# ※ Xserverのサーバーパネルで「SSL設定（無料独自SSL）」を追加し、
+#    反映が完了（httpsで開ける状態）してから下の # を外して有効化してください。
 # ------------------------------------------------------------------------------
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteCond %{HTTPS} off
-  RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
-</IfModule>
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{HTTPS} off
+#   RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+# </IfModule>
 
 # ------------------------------------------------------------------------------
 # 4. Gzip圧縮転送（大容量の章JSON・JS・CSSを高速配信）
