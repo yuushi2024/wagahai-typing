@@ -2,8 +2,11 @@
 import { TypingSession, EndlessRun } from './engine.js';
 import { tokensForParagraph } from './align.js';
 import { canonicalRomaji } from './romaji.js';
+import { SoundFX } from './sound.js';
 
 const $ = (id) => document.getElementById(id);
+
+const KANJI_CHAPTERS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一'];
 
 const state = {
   index: null,
@@ -14,9 +17,10 @@ const state = {
   errorTimer: null,
   mode: 'normal', // 'normal' | 'endless'
   run: null, // エンドレスモードの通算管理
+  sound: new SoundFX(),
 };
 
-// 章データの取得（存在する章はすべて取得できる）
+// 章データの取得
 async function fetchChapterData(chapterNo) {
   const res = await fetch(`data/chapters/chapter${String(chapterNo).padStart(2, '0')}.json`);
   if (!res.ok) throw new Error(`章データの取得に失敗 (${res.status})`);
@@ -32,18 +36,26 @@ async function loadIndex() {
 
 function renderChapters(index) {
   $('select-note').textContent =
-    `全${index.chapter_count}章 ・ 全${index.paragraph_count.toLocaleString()}段落。章を選んでください。`;
+    `全${index.chapter_count}章 ・ 全${index.paragraph_count.toLocaleString()}段落。お好みの章を選んでください。`;
   const grid = $('chapter-grid');
   grid.innerHTML = '';
   for (const ch of index.chapters) {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'chapter-card';
+    const kn = KANJI_CHAPTERS[ch.chapter] || String(ch.chapter);
+    const pct = Math.min(100, Math.round((ch.paragraph_count / index.paragraph_count) * 100 * 2));
     card.innerHTML = `
-      <span class="cc-no">CHAPTER ${String(ch.chapter).padStart(2, '0')}</span>
-      <span class="cc-title">第${ch.chapter}章</span>
-      <span class="cc-meta">${ch.paragraph_count} 段落</span>
-      <span class="cc-bar"><i style="width:${Math.min(100, (ch.paragraph_count / index.paragraph_count) * 100 * 2)}%"></i></span>`;
+      <span class="cc-spine" aria-hidden="true"></span>
+      <div class="cc-body">
+        <div class="cc-header">
+          <span class="cc-no">巻の${kn}</span>
+          <span class="cc-cat-icon">🐾</span>
+        </div>
+        <span class="cc-title">第${kn}章</span>
+        <span class="cc-meta">📖 全 ${ch.paragraph_count} 段落</span>
+        <span class="cc-bar"><i style="width:${pct}%"></i></span>
+      </div>`;
     card.addEventListener('click', () => startChapter(index, ch.chapter));
     grid.appendChild(card);
   }
@@ -105,7 +117,8 @@ function loadParagraph() {
   const p = state.session.current;
   state.tokens = tokensForParagraph(p.text, p.ruby);
   const label = $('game-chapter-label');
-  label.textContent = `第${state.chapter}章`;
+  const kn = KANJI_CHAPTERS[state.chapter] || String(state.chapter);
+  label.textContent = `第${kn}章`;
   if (state.mode === 'endless' && state.run) {
     label.textContent += `（${state.run.chapterPos + 1}/${state.run.chapterCount}）`;
   }
@@ -165,7 +178,7 @@ function refreshHighlight() {
 function renderGuide() {
   const cur = state.session.matcher.current();
   if (!cur) {
-    $('guide-kana').textContent = '完了';
+    $('guide-kana').textContent = '了';
     $('guide-romaji').textContent = '';
   } else {
     $('guide-kana').textContent = cur.kana;
@@ -194,7 +207,6 @@ function escapeHtml(s) {
 }
 
 function updateStats() {
-  // エンドレス中は全章通算のスコアを表示する
   const st = state.mode === 'endless' && state.run
     ? state.run.totalStats
     : state.session.stats;
@@ -202,28 +214,27 @@ function updateStats() {
   $('stat-miss').textContent = st.miss;
   $('stat-acc').textContent = `${st.accuracy.toFixed(1)}%`;
   $('stat-kpm').innerHTML = `${st.kpm.toFixed(0)} <small>KPM</small>`;
-  $('game-progress').textContent = `${state.session.paragraphNumber} / ${state.session.paragraphCount} 段落`;
+  $('game-progress').textContent = `段落 ${state.session.paragraphNumber} / ${state.session.paragraphCount}`;
 }
 
-// 画面下部のトースト通知（章の自動進行などに使う）
+// 画面下部のトースト通知
 let toastTimer = null;
 function showToast(text) {
   const el = $('toast');
   el.textContent = text;
   el.classList.remove('is-hidden');
-  void el.offsetWidth; // 連続表示でもアニメーションを再生し直す
+  void el.offsetWidth;
   el.classList.add('is-show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     el.classList.remove('is-show');
     el.classList.add('is-hidden');
-  }, 1800);
+  }, 2000);
 }
 
 function flashError() {
   const panel = $('text-panel');
   panel.classList.remove('is-error');
-  // 連続ミスでもアニメーションを再生し直す
   void panel.offsetWidth;
   panel.classList.add('is-error');
   clearTimeout(state.errorTimer);
@@ -231,22 +242,28 @@ function flashError() {
 }
 
 function handleKey(e) {
-  if (state.session.finished) return;
+  if (!state.session || state.session.finished) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') { showSelect(); return; }
-  if (e.key.length !== 1) return; // 修飾キー・特殊キーは無視
+  if (e.key.length !== 1) return;
   e.preventDefault();
 
   const r = state.session.input(e.key);
   if (r.type === 'miss') {
+    state.sound.playMiss();
     flashError();
     updateStats();
     return;
   }
+
+  state.sound.playKey();
   updateStats();
+
   if (r.type === 'paragraph-complete') {
+    state.sound.playParagraph();
     loadParagraph();
   } else if (r.type === 'chapter-complete') {
+    state.sound.playChapter();
     handleChapterComplete();
     return;
   }
@@ -255,25 +272,29 @@ function handleKey(e) {
 }
 
 function skipParagraph() {
-  if (state.session.finished) return;
+  if (!state.session || state.session.finished) return;
   const r = state.session.skipParagraph();
   updateStats();
-  if (r.type === 'chapter-complete') { handleChapterComplete(); return; }
+  if (r.type === 'chapter-complete') {
+    state.sound.playChapter();
+    handleChapterComplete();
+    return;
+  }
   loadParagraph();
 }
 
-// 章の最終段落を打ち終えたときの処理（モードで分岐）
+// 章の最終段落を打ち終えたときの処理
 async function handleChapterComplete() {
   if (state.mode === 'endless' && state.run) {
     const cleared = state.chapter;
     const next = state.run.nextChapterNumber;
     if (next === null) {
-      // 最終章まで走破 → 完全クリア
       state.run.advance();
       showResult();
       return;
     }
-    showToast(`第${cleared}章 クリア！ → 第${next}章へ`);
+    const nextKn = KANJI_CHAPTERS[next] || String(next);
+    showToast(`🐾 第${KANJI_CHAPTERS[cleared]}章 読了！ → 第${nextKn}章へ進みます`);
     try {
       await advanceRunChapter(next);
     } catch (err) {
@@ -289,28 +310,39 @@ function showResult() {
   const isEndless = state.mode === 'endless' && state.run;
   const st = isEndless ? state.run.totalStats : state.session.stats;
   const lastChapter = state.index.chapters[state.index.chapters.length - 1].chapter;
+  const kn = KANJI_CHAPTERS[state.chapter] || String(state.chapter);
+  const praise = $('result-praise');
 
   if (isEndless) {
     const completed = st.clearedChapters >= state.run.chapterCount;
-    $('result-kicker').textContent = completed ? '完全クリア！' : '章クリア！';
+    $('result-kicker').textContent = completed ? '全巻完読！' : '章走破！';
     $('result-title').textContent = completed
-      ? `全${state.run.chapterCount}章走破！完全クリア！`
-      : `第${state.chapter}章クリア`;
+      ? `全${state.run.chapterCount}章走破！完全読了！`
+      : `第${kn}章 走破`;
+    if (praise) {
+      praise.textContent = completed
+        ? '「全巻走破、実に見事であった！吾輩も感服の至りである。」'
+        : '「次の章へそのまま進め！歩みを止めることなかれ。」';
+    }
     $('result-paras').textContent =
       `${st.clearedChapters} / ${state.run.chapterCount} 章 ・ ${state.run.totalParagraphs} 段落`;
     $('btn-next').hidden = true;
-    $('btn-retry').textContent = completed ? 'もう一度（第1章から）' : '第1章からやり直す';
+    $('btn-retry').textContent = completed ? 'もう一度（第一章から）' : '第一章からやり直す';
     $('btn-retry').dataset.action = 'endless-restart';
   } else {
-    $('result-kicker').textContent = '章クリア！';
-    $('result-title').textContent = `第${state.chapter}章`;
-    $('result-paras').textContent = `${st.paragraphCount} 段落`;
+    $('result-kicker').textContent = '読了之証';
+    $('result-title').textContent = `第${kn}章 読了`;
+    if (praise) {
+      praise.textContent = '「見事なる打鍵にて、此の一章を読了せり。」';
+    }
+    $('result-paras').textContent = `全 ${st.paragraphCount} 段落`;
     $('btn-next').hidden = false;
-    $('btn-retry').textContent = 'もう一度';
+    $('btn-retry').textContent = 'もう一度打つ';
     $('btn-retry').dataset.action = 'retry';
     const hasNext = state.chapter < lastChapter;
     $('btn-next').disabled = !hasNext;
-    $('btn-next').textContent = hasNext ? `第${state.chapter + 1}章へ` : '最終章です';
+    const nextKn = KANJI_CHAPTERS[state.chapter + 1] || String(state.chapter + 1);
+    $('btn-next').textContent = hasNext ? `第${nextKn}章へ進む 📖` : '全巻読了です 🐾';
   }
 
   $('result-correct').textContent = st.correct;
@@ -325,10 +357,10 @@ function showResult() {
 function show(id) {
   for (const v of document.querySelectorAll('.view')) v.classList.add('is-hidden');
   $(id).classList.remove('is-hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function showSelect() {
-  // 章選択に戻るときはトーストも消す
   const el = $('toast');
   el.classList.remove('is-show');
   el.classList.add('is-hidden');
@@ -349,8 +381,48 @@ function setMode(mode) {
   $('select-note').hidden = endless;
 }
 
+// ---------- ユーティリティ制御（テーマ・効果音） ----------
+function initTheme() {
+  const btn = $('btn-theme-toggle');
+  if (!btn) return;
+  const updateUI = () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    $('theme-icon').textContent = isDark ? '📖' : '🕯️';
+    $('theme-label').textContent = isDark ? '文庫（昼）' : '書斎（夜）';
+  };
+  updateUI();
+  btn.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+      document.documentElement.removeAttribute('data-theme');
+      try { localStorage.setItem('wagahai_theme', 'light'); } catch (_) {}
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      try { localStorage.setItem('wagahai_theme', 'dark'); } catch (_) {}
+    }
+    updateUI();
+  });
+}
+
+function initSound() {
+  const btn = $('btn-sound-toggle');
+  if (!btn) return;
+  const updateUI = () => {
+    $('sound-icon').textContent = state.sound.enabled ? '🔊' : '🔇';
+    $('sound-label').textContent = state.sound.enabled ? '音: 入' : '音: 切';
+  };
+  updateUI();
+  btn.addEventListener('click', () => {
+    state.sound.toggle();
+    updateUI();
+  });
+}
+
 // ---------- 初期化 ----------
 async function init() {
+  initTheme();
+  initSound();
+
   $('btn-back').addEventListener('click', showSelect);
   $('btn-skip').addEventListener('click', skipParagraph);
   $('btn-menu').addEventListener('click', showSelect);
@@ -381,7 +453,7 @@ async function init() {
     setMode('normal');
   } catch (err) {
     $('select-note').textContent =
-      `データを読み込めませんでした：${err.message}。ローカルサーバー（例: python3 -m http.server）で開いてください。`;
+      `目録を読み込めませんでした：${err.message}。ローカルサーバーで開いてください。`;
   }
 }
 

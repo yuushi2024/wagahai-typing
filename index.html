@@ -3,105 +3,204 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>吾輩は猫である タイピング</title>
-<meta name="description" content="夏目漱石『吾輩は猫である』全文を打てるタイピングゲーム">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%B1%3C/text%3E%3C/svg%3E">
+<title>吾輩は猫である タイピング ｜ 夏目漱石 原文全文タイピング</title>
+<meta name="description" content="夏目漱石『吾輩は猫である』全11章・2,245段落を原文のルビとともに味わいながら打てる、レトロモダンなタイピングゲーム。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='85'%3E%F0%9F%90%BE%3C/text%3E%3C/svg%3E">
+
+<!-- Google Fonts: 漱石の世界観を彩る優美なしっぽり明朝・Zenオールド明朝・JetBrains Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Shippori+Mincho:wght@400;500;600;700&family=Zen+Old+Mincho:wght@400;600;700&display=swap" rel="stylesheet">
+
 <link rel="stylesheet" href="assets/css/styles.css">
+
+<!-- テーマ初期化（チラつき防止） -->
+<script>
+  (function() {
+    try {
+      const saved = localStorage.getItem('wagahai_theme');
+      if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch (_) {}
+  })();
+</script>
 </head>
 <body>
-<div class="app">
+<div class="site-shell">
 
-  <!-- 章選択 -->
-  <section id="view-select" class="view">
-    <header class="hero">
-      <p class="hero-kicker">夏目漱石 ／ 青空文庫</p>
-      <h1 class="hero-title">吾輩は猫である<span class="hero-title-sub">タイピング</span></h1>
-      <p class="hero-lead">
-        全11章・全2,245段落の原文を、ルビ（ひらがな）どおりにローマ字で打ち込むタイピングゲーム。
-        章をえらぶと、その章のデータだけを読み込みます。
-      </p>
-      <div class="mode-select" role="group" aria-label="プレイモード">
-        <button id="mode-normal" class="mode-btn is-active" type="button" aria-pressed="true">
-          <span class="mode-name">通常モード</span>
-          <span class="mode-desc">章ごとにリザルト</span>
-        </button>
-        <button id="mode-endless" class="mode-btn" type="button" aria-pressed="false">
-          <span class="mode-name">エンドレスモード</span>
-          <span class="mode-desc">全章通し・自動で次の章へ</span>
-        </button>
-      </div>
-      <p class="hero-note" id="select-note">読み込み中…</p>
-    </header>
-    <div id="chapter-grid" class="chapter-grid"></div>
-    <div id="endless-panel" class="endless-panel is-hidden">
-      <p class="endless-lead">
-        第1章から最終章まで、章をまたいで自動で続けて進みます。スコアは全章を通した通算でカウントされます。
-      </p>
-      <button id="btn-endless-start" class="btn btn-primary btn-lg" type="button">▶ 第1章から全章スタート</button>
+  <!-- ヘッダーユーティリティバー -->
+  <header class="site-bar">
+    <div class="site-brand">
+      <span class="site-cat-stamp">🐾</span>
+      <span class="site-brand-title">吾輩は猫である</span>
+      <span class="site-brand-badge">タイピング</span>
     </div>
-  </section>
-
-  <!-- プレイ画面 -->
-  <section id="view-game" class="view is-hidden">
-    <header class="topbar">
-      <button id="btn-back" class="btn btn-ghost" type="button">← 章選択</button>
-      <div class="topbar-title">
-        <span class="chapter-label" id="game-chapter-label">第1章</span>
-        <span class="chapter-progress" id="game-progress">1 / 33 段落</span>
-        <span class="mode-badge" id="game-mode-badge" hidden>エンドレスモード</span>
-      </div>
-      <button id="btn-skip" class="btn btn-ghost" type="button">この段落をスキップ ⇥</button>
-    </header>
-
-    <div class="statbar" id="statbar">
-      <div class="stat"><span class="stat-label">正解</span><span class="stat-value" id="stat-correct">0</span></div>
-      <div class="stat"><span class="stat-label">ミス</span><span class="stat-value" id="stat-miss">0</span></div>
-      <div class="stat"><span class="stat-label">正確率</span><span class="stat-value" id="stat-acc">100%</span></div>
-      <div class="stat"><span class="stat-label">速度</span><span class="stat-value" id="stat-kpm">0 <small>KPM</small></span></div>
+    <div class="site-actions">
+      <button id="btn-sound-toggle" class="btn btn-util" type="button" aria-label="効果音の切り替え">
+        <span class="util-icon" id="sound-icon">🔊</span>
+        <span class="util-label" id="sound-label">音: 入</span>
+      </button>
+      <button id="btn-theme-toggle" class="btn btn-util" type="button" aria-label="配色テーマの切り替え">
+        <span class="util-icon" id="theme-icon">🕯️</span>
+        <span class="util-label" id="theme-label">書斎（夜）</span>
+      </button>
     </div>
+  </header>
 
-    <main class="play">
-      <div class="romaji-guide" aria-hidden="true">
-        <div class="guide-current">
-          <span class="guide-kana" id="guide-kana">あ</span>
-          <span class="guide-romaji" id="guide-romaji"></span>
+  <div class="app">
+
+    <!-- 章選択 -->
+    <section id="view-select" class="view">
+      <header class="hero">
+        <div class="hero-crest" aria-hidden="true">
+          <span class="crest-decor">❖</span>
+          <span class="crest-cat">🐾</span>
+          <span class="crest-decor">❖</span>
         </div>
-        <div class="guide-line" id="guide-line"></div>
+        <p class="hero-kicker">夏目漱石 明治三十八年執筆 ／ 青空文庫より</p>
+        <h1 class="hero-title">吾輩は猫である<span class="hero-title-sub">全文タイピング</span></h1>
+
+        <div class="hero-quote">
+          <p class="quote-text">「吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。」</p>
+        </div>
+
+        <p class="hero-lead">
+          文豪・夏目漱石の不朽の名作を、青空文庫の原文ルビとともに味わいながら打ち進めるタイピング。<br class="pc-only">
+          全11章・全2,245段落からお好みの章を選んで、明治の息吹を指先でたどってみてください。
+        </p>
+
+        <div class="mode-select" role="group" aria-label="プレイモードの選択">
+          <button id="mode-normal" class="mode-btn is-active" type="button" aria-pressed="true">
+            <span class="mode-icon">📖</span>
+            <span class="mode-text">
+              <span class="mode-name">通常モード</span>
+              <span class="mode-desc">章を選んで1章ずつ読了</span>
+            </span>
+          </button>
+          <button id="mode-endless" class="mode-btn" type="button" aria-pressed="false">
+            <span class="mode-icon">🚀</span>
+            <span class="mode-text">
+              <span class="mode-name">エンドレスモード</span>
+              <span class="mode-desc">第1章から全11章ノンストップ</span>
+            </span>
+          </button>
+        </div>
+
+        <p class="hero-note" id="select-note">目録を読み込み中…</p>
+      </header>
+
+      <div id="chapter-grid" class="chapter-grid" role="region" aria-label="章一覧"></div>
+
+      <div id="endless-panel" class="endless-panel is-hidden">
+        <div class="endless-card">
+          <div class="endless-crest">🐾</div>
+          <h2 class="endless-title">全巻一気走破の旅</h2>
+          <p class="endless-lead">
+            第一章の冒頭から最終第十一章の結びまで、章をまたいで自動で次々と読み込み継続します。<br>
+            スコアは全巻を通じた通算で集計されます。あなたの読書タイピング力を試してみませんか。
+          </p>
+          <button id="btn-endless-start" class="btn btn-primary btn-lg" type="button">
+            ▶ 第一章から全巻スタート
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- プレイ画面 -->
+    <section id="view-game" class="view is-hidden">
+      <header class="topbar">
+        <button id="btn-back" class="btn btn-ghost" type="button">‹ 目次へ戻る</button>
+        <div class="topbar-title">
+          <span class="chapter-label" id="game-chapter-label">第一章</span>
+          <span class="chapter-progress" id="game-progress">段落 1 / 33</span>
+          <span class="mode-badge" id="game-mode-badge" hidden>エンドレス走破中 🐾</span>
+        </div>
+        <button id="btn-skip" class="btn btn-ghost" type="button">段落を飛ばす ›</button>
+      </header>
+
+      <div class="statbar" id="statbar" role="region" aria-label="現在の成績">
+        <div class="stat">
+          <span class="stat-label">正解打鍵</span>
+          <span class="stat-value" id="stat-correct">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">誤打（ミス）</span>
+          <span class="stat-value" id="stat-miss">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">正確度</span>
+          <span class="stat-value" id="stat-acc">100%</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">読書速度</span>
+          <span class="stat-value" id="stat-kpm">0 <small>KPM</small></span>
+        </div>
       </div>
 
-      <div class="text-panel" id="text-panel" tabindex="0" aria-label="タイピング対象の本文">
-        <div class="text-line" id="text-line"></div>
-      </div>
-      <p class="hint" id="hint">キーボードで入力してください（ローマ字）。ミスしても入力は止まりません。</p>
-    </main>
-  </section>
+      <main class="play">
+        <!-- ローマ字・かなガイド -->
+        <div class="romaji-guide" aria-hidden="true">
+          <div class="guide-current">
+            <span class="guide-kana-box">
+              <span class="guide-kana" id="guide-kana">あ</span>
+            </span>
+            <span class="guide-romaji" id="guide-romaji"></span>
+          </div>
+          <div class="guide-line" id="guide-line"></div>
+        </div>
 
-  <!-- リザルト -->
-  <section id="view-result" class="view is-hidden">
-    <div class="result-card">
-      <p class="result-kicker" id="result-kicker">章クリア！</p>
-      <h2 class="result-title" id="result-title">第1章</h2>
-      <dl class="result-grid">
-        <div><dt>正解打鍵</dt><dd id="result-correct">0</dd></div>
-        <div><dt>ミス</dt><dd id="result-miss">0</dd></div>
-        <div><dt>正確率</dt><dd id="result-acc">0%</dd></div>
-        <div><dt>速度</dt><dd id="result-kpm">0 KPM</dd></div>
-        <div><dt>時間</dt><dd id="result-time">0秒</dd></div>
-        <div><dt>段落</dt><dd id="result-paras">0</dd></div>
-      </dl>
-      <div class="result-actions">
-        <button id="btn-retry" class="btn btn-primary" type="button">もう一度</button>
-        <button id="btn-next" class="btn" type="button">次の章へ</button>
-        <button id="btn-menu" class="btn btn-ghost" type="button">章選択へ</button>
+        <!-- 原文とルビの表示パネル -->
+        <div class="text-panel-wrapper">
+          <div class="text-panel" id="text-panel" tabindex="0" aria-label="タイピング対象の本文">
+            <div class="text-line" id="text-line"></div>
+          </div>
+        </div>
+
+        <p class="hint" id="hint">⌨️ キーボードでローマ字を入力してください（どの綴りでも打てます）</p>
+      </main>
+    </section>
+
+    <!-- リザルト -->
+    <section id="view-result" class="view is-hidden">
+      <div class="result-card">
+        <div class="result-seal" aria-hidden="true">
+          <span class="seal-inner">読了<br>🐾</span>
+        </div>
+        <p class="result-kicker" id="result-kicker">読了之証</p>
+        <h2 class="result-title" id="result-title">第一章</h2>
+        <p class="result-praise" id="result-praise">「見事なる打鍵にて、此の一章を読了せり。」</p>
+
+        <dl class="result-grid">
+          <div class="rg-item"><dt>正解打鍵数</dt><dd id="result-correct">0</dd></div>
+          <div class="rg-item"><dt>誤打数</dt><dd id="result-miss">0</dd></div>
+          <div class="rg-item"><dt>正確率</dt><dd id="result-acc">0%</dd></div>
+          <div class="rg-item"><dt>平均速度</dt><dd id="result-kpm">0 KPM</dd></div>
+          <div class="rg-item"><dt>所要時間</dt><dd id="result-time">0秒</dd></div>
+          <div class="rg-item"><dt>読了段落</dt><dd id="result-paras">0</dd></div>
+        </dl>
+
+        <div class="result-actions">
+          <button id="btn-next" class="btn btn-primary btn-lg" type="button">次の章へ進む 📖</button>
+          <button id="btn-retry" class="btn btn-lg" type="button">もう一度打つ</button>
+          <button id="btn-menu" class="btn btn-ghost" type="button">目次（章選択）へ</button>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+
+  </div>
+
+  <div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
+
+  <footer class="footer">
+    <p class="footer-text">
+      底本：青空文庫「吾輩は猫である」（夏目漱石／パブリックドメイン）<br>
+      制作：<a href="https://github.com/yuushi2024" target="_blank" rel="noopener">ゆうし</a> 🐾
+    </p>
+  </footer>
 
 </div>
-<div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
-<footer class="footer">
-  <p>底本：青空文庫「吾輩は猫である」／パブリックドメイン。読みはルビと自動補完によるものです。</p>
-</footer>
+
 <script type="module" src="assets/js/app.js"></script>
 </body>
 </html>
